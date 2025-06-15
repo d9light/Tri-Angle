@@ -1,7 +1,6 @@
 TRI-angle 🔺
-Um jogo de estratégia baseado em tabuleiro triangular desenvolvido em C utilizando a biblioteca Allegro 5. O objetivo é formar uma linha com 3 peças antes do seu oponente!
 
-TRI-angle 
+Um jogo de estratégia baseado em tabuleiro triangular desenvolvido em C utilizando a biblioteca Allegro 5. O objetivo é formar uma linha com 3 peças antes do seu oponente!
 
 🎯 Sobre o Projeto
 TRI-angle é um jogo de estratégia para dois jogadores inspirado no clássico "Moinho" (Nine Men's Morris), mas adaptado para um tabuleiro triangular único. O jogo combina elementos de estratégia, planejamento e táticas em um ambiente visualmente atrativo.
