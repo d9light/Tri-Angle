@@ -231,23 +231,78 @@ void reiniciar_jogo(Ponto pontos[], int *jogador_atual, int *ponto_selecionado, 
     fade_in_ativo = false;
 }
 
+// ========== FUNÇÕES MODIFICADAS PARA ARQUIVOS .TXT ==========
+
 bool salvar_historico(Historico *hist) {
-    FILE *f = fopen("historico.dat", "wb");
+    FILE *f = fopen("historico.txt", "w");
     if (!f) return false;
-    fwrite(hist, sizeof(Historico), 1, f);
+
+    // Cabeçalho do arquivo
+    fprintf(f, "=== HISTORICO TRI-ANGLE ===\n");
+    fprintf(f, "ESTATISTICAS_PVP: %d %d %d %d %d %d\n",
+            hist->partidas_pvp, hist->vitorias_p1_pvp, hist->vitorias_p2_pvp,
+            hist->empates_pvp, hist->menor_tempo_pvp, hist->maior_tempo_pvp);
+
+    fprintf(f, "ESTATISTICAS_PVB: %d %d %d %d %d %d\n",
+            hist->partidas_pvb, hist->vitorias_jogador_pvb, hist->vitorias_bot_pvb,
+            hist->empates_pvb, hist->menor_tempo_pvb, hist->maior_tempo_pvb);
+
+    fprintf(f, "TOTAL_REGISTROS: %d\n", hist->total_registros);
+    fprintf(f, "=== REGISTROS ===\n");
+
+    // Salvar cada registro
+    for (int i = 0; i < hist->total_registros; i++) {
+        fprintf(f, "PARTIDA: %s %d %d %s\n",
+                hist->registros[i].modo,
+                hist->registros[i].vencedor,
+                hist->registros[i].tempo_segundos,
+                hist->registros[i].data);
+    }
+
     fclose(f);
     return true;
 }
 
 bool carregar_historico(Historico *hist) {
-    FILE *f = fopen("historico.dat", "rb");
+    FILE *f = fopen("historico.txt", "r");
     if (!f) {
+        // Inicializar histórico vazio se arquivo não existir
         memset(hist, 0, sizeof(Historico));
         hist->menor_tempo_pvp = 999999;
         hist->menor_tempo_pvb = 999999;
         return false;
     }
-    fread(hist, sizeof(Historico), 1, f);
+
+    char linha[256];
+
+    // Ler cabeçalho
+    fgets(linha, sizeof(linha), f); // Pular linha do cabeçalho
+
+    // Ler estatísticas PvP
+    fscanf(f, "ESTATISTICAS_PVP: %d %d %d %d %d %d\n",
+           &hist->partidas_pvp, &hist->vitorias_p1_pvp, &hist->vitorias_p2_pvp,
+           &hist->empates_pvp, &hist->menor_tempo_pvp, &hist->maior_tempo_pvp);
+
+    // Ler estatísticas PvB
+    fscanf(f, "ESTATISTICAS_PVB: %d %d %d %d %d %d\n",
+           &hist->partidas_pvb, &hist->vitorias_jogador_pvb, &hist->vitorias_bot_pvb,
+           &hist->empates_pvb, &hist->menor_tempo_pvb, &hist->maior_tempo_pvb);
+
+    // Ler total de registros
+    fscanf(f, "TOTAL_REGISTROS: %d\n", &hist->total_registros);
+
+    // Pular linha "=== REGISTROS ==="
+    fgets(linha, sizeof(linha), f);
+
+    // Ler cada registro
+    for (int i = 0; i < hist->total_registros && i < MAX_HISTORICO; i++) {
+        fscanf(f, "PARTIDA: %s %d %d %[^\n]\n",
+               hist->registros[i].modo,
+               &hist->registros[i].vencedor,
+               &hist->registros[i].tempo_segundos,
+               hist->registros[i].data);
+    }
+
     fclose(f);
     return true;
 }
@@ -284,28 +339,36 @@ void adicionar_registro_historico(Historico *hist, const char *modo, int vencedo
 
 bool salvar_jogo(const char *filename, Ponto pontos[], int jogador_atual, int ponto_selecionado, bool fase_colocacao,
                  int bolas_colocadas, int jogadas_sem_progresso, time_t inicio_partida, const char *modo) {
-    FILE *f = fopen(filename, "wb");
+    FILE *f = fopen(filename, "w");
     if (!f) return false;
 
-    int versao = 2;
-    fwrite(&versao, sizeof(int), 1, f);
-    fwrite(&jogador_atual, sizeof(int), 1, f);
-    fwrite(&ponto_selecionado, sizeof(int), 1, f);
-    fwrite(&fase_colocacao, sizeof(bool), 1, f);
-    fwrite(&bolas_colocadas, sizeof(int), 1, f);
-    fwrite(&jogadas_sem_progresso, sizeof(int), 1, f);
-    fwrite(&inicio_partida, sizeof(time_t), 1, f);
+    // Cabeçalho e versão
+    fprintf(f, "=== SAVE TRI-ANGLE ===\n");
+    fprintf(f, "VERSAO: 2\n");
 
-    int len_modo = strlen(modo);
-    fwrite(&len_modo, sizeof(int), 1, f);
-    fwrite(modo, sizeof(char), len_modo, f);
+    // Dados do jogo
+    fprintf(f, "JOGADOR_ATUAL: %d\n", jogador_atual);
+    fprintf(f, "PONTO_SELECIONADO: %d\n", ponto_selecionado);
+    fprintf(f, "FASE_COLOCACAO: %d\n", fase_colocacao ? 1 : 0);
+    fprintf(f, "BOLAS_COLOCADAS: %d\n", bolas_colocadas);
+    fprintf(f, "JOGADAS_SEM_PROGRESSO: %d\n", jogadas_sem_progresso);
+    fprintf(f, "INICIO_PARTIDA: %ld\n", (long)inicio_partida);
+    fprintf(f, "MODO: %s\n", modo);
 
+    // Dados dos pontos
+    fprintf(f, "=== PONTOS ===\n");
     for (int i = 0; i < 7; i++) {
-        fwrite(&pontos[i], sizeof(Ponto), 1, f);
+        fprintf(f, "PONTO_%d: %d %d %d %d %s %.2f %.2f %d %d\n", i,
+                pontos[i].x, pontos[i].y, pontos[i].jogador,
+                pontos[i].selecionado ? 1 : 0, pontos[i].posicao,
+                pontos[i].escala, pontos[i].rotacao,
+                pontos[i].animando ? 1 : 0, pontos[i].frame_animacao);
     }
 
+    // Checksum para verificação
     int checksum = jogador_atual + ponto_selecionado + bolas_colocadas + jogadas_sem_progresso;
-    fwrite(&checksum, sizeof(int), 1, f);
+    fprintf(f, "CHECKSUM: %d\n", checksum);
+
     fclose(f);
     return true;
 }
@@ -313,51 +376,76 @@ bool salvar_jogo(const char *filename, Ponto pontos[], int jogador_atual, int po
 bool carregar_jogo(const char *filename, Ponto pontos[], int *jogador_atual, int *ponto_selecionado,
                    bool *fase_colocacao, int *bolas_colocadas, int *jogadas_sem_progresso, time_t *inicio_partida,
                    char *modo) {
-    FILE *f = fopen(filename, "rb");
+    FILE *f = fopen(filename, "r");
     if (!f) return false;
 
+    char linha[256];
     int versao;
-    fread(&versao, sizeof(int), 1, f);
+
+    // Ler cabeçalho
+    fgets(linha, sizeof(linha), f); // Pular linha do cabeçalho
+
+    // Verificar versão
+    fscanf(f, "VERSAO: %d\n", &versao);
     if (versao != 2) {
         fclose(f);
         return false;
     }
 
-    fread(jogador_atual, sizeof(int), 1, f);
-    fread(ponto_selecionado, sizeof(int), 1, f);
-    fread(fase_colocacao, sizeof(bool), 1, f);
-    fread(bolas_colocadas, sizeof(int), 1, f);
-    fread(jogadas_sem_progresso, sizeof(int), 1, f);
-    fread(inicio_partida, sizeof(time_t), 1, f);
+    // Ler dados do jogo
+    fscanf(f, "JOGADOR_ATUAL: %d\n", jogador_atual);
+    fscanf(f, "PONTO_SELECIONADO: %d\n", ponto_selecionado);
 
-    int len_modo;
-    fread(&len_modo, sizeof(int), 1, f);
-    fread(modo, sizeof(char), len_modo, f);
-    modo[len_modo] = '\0';
+    int fase_temp;
+    fscanf(f, "FASE_COLOCACAO: %d\n", &fase_temp);
+    *fase_colocacao = (fase_temp == 1);
 
+    fscanf(f, "BOLAS_COLOCADAS: %d\n", bolas_colocadas);
+    fscanf(f, "JOGADAS_SEM_PROGRESSO: %d\n", jogadas_sem_progresso);
+
+    long inicio_temp;
+    fscanf(f, "INICIO_PARTIDA: %ld\n", &inicio_temp);
+    *inicio_partida = (time_t)inicio_temp;
+
+    fscanf(f, "MODO: %s\n", modo);
+
+    // Pular linha "=== PONTOS ==="
+    fgets(linha, sizeof(linha), f);
+
+    // Ler dados dos pontos
     for (int i = 0; i < 7; i++) {
-        fread(&pontos[i], sizeof(Ponto), 1, f);
+        int selecionado_temp, animando_temp;
+        fscanf(f, "PONTO_%d: %d %d %d %d %s %f %f %d %d\n", &i,
+               &pontos[i].x, &pontos[i].y, &pontos[i].jogador,
+               &selecionado_temp, pontos[i].posicao,
+               &pontos[i].escala, &pontos[i].rotacao,
+               &animando_temp, &pontos[i].frame_animacao);
+
+        pontos[i].selecionado = (selecionado_temp == 1);
+        pontos[i].animando = (animando_temp == 1);
     }
 
+    // Verificar checksum
     int checksum_esperado, checksum_real;
-    fread(&checksum_esperado, sizeof(int), 1, f);
+    fscanf(f, "CHECKSUM: %d\n", &checksum_esperado);
     checksum_real = *jogador_atual + *ponto_selecionado + *bolas_colocadas + *jogadas_sem_progresso;
+
     fclose(f);
     return (checksum_esperado == checksum_real);
 }
 
 bool salvar_jogo_slot(int slot, Ponto pontos[], int jogador_atual, int ponto_selecionado, bool fase_colocacao,
                       int bolas_colocadas, int jogadas_sem_progresso, time_t inicio_partida, const char *modo) {
-    char filename[20];
-    sprintf(filename, "savegame%d.dat", slot);
+    char filename[30];
+    sprintf(filename, "savegame%d.txt", slot);  // MUDANÇA: .dat para .txt
     return salvar_jogo(filename, pontos, jogador_atual, ponto_selecionado, fase_colocacao, bolas_colocadas,
                        jogadas_sem_progresso, inicio_partida, modo);
 }
 
 bool carregar_jogo_slot(int slot, Ponto pontos[], int *jogador_atual, int *ponto_selecionado, bool *fase_colocacao,
                         int *bolas_colocadas, int *jogadas_sem_progresso, time_t *inicio_partida, char *modo) {
-    char filename[20];
-    sprintf(filename, "savegame%d.dat", slot);
+    char filename[30];
+    sprintf(filename, "savegame%d.txt", slot);  // MUDANÇA: .dat para .txt
     return carregar_jogo(filename, pontos, jogador_atual, ponto_selecionado, fase_colocacao, bolas_colocadas,
                          jogadas_sem_progresso, inicio_partida, modo);
 }
@@ -565,10 +653,12 @@ void processar_vitoria_derrota(int vencedor, const char *modo_jogo, EstadoTela *
         adicionar_registro_historico(historico, modo_jogo, vencedor, tempo_partida);
     }
 }
+
 void atualizar_estados_vitoria_derrota(EstadoTela *estado, Ponto pontos[], int *jogador_atual, int *ponto_selecionado,
                                        bool *fase_colocacao, int *bolas_colocadas, int *jogadas_sem_progresso,
                                        time_t *inicio_partida, int *vencedor) {
 }
+
 void processar_clique_vitoria_derrota(int mx, int my, EstadoTela *estado, Ponto pontos[], int *jogador_atual,
                                       int *ponto_selecionado, bool *fase_colocacao, int *bolas_colocadas,
                                       int *jogadas_sem_progresso, time_t *inicio_partida, int *vencedor) {
@@ -600,6 +690,7 @@ void processar_clique_vitoria_derrota(int mx, int my, EstadoTela *estado, Ponto 
         retomar_timer_jogo(inicio_partida);
     }
 }
+
 void renderizar_efeitos_vitoria_derrota(ALLEGRO_FONT *fonte_titulo, int vencedor) {
     if (vitoria_ativa) {
         desenhar_mensagem_vitoria(fonte_titulo, vencedor);
@@ -1135,7 +1226,7 @@ int main(void) {
                 } else if (dentro_do_retangulo(mx, my, botaoVoltarMenuPrincipal)) {
                     estado = ESTADO_MENU;
                 }
-            } else if ((estado == ESTADO_JOGAR_PVP || estado == ESTADO_JOGAR_PVB) && !vitoria_ativa && !derrota_ativa && !empate_ativo) {  // MODIFICADO
+            } else if ((estado == ESTADO_JOGAR_PVP || estado == ESTADO_JOGAR_PVB) && !vitoria_ativa && !derrota_ativa && !empate_ativo) {
                 if (vencedor != 0) {
                     processar_vitoria_derrota(vencedor, modo_jogo, &estado, &inicio_partida, &historico);
                 } else if (dentro_do_retangulo(mx, my, botaoVoltarSelecaoModo)) {
@@ -1211,7 +1302,7 @@ int main(void) {
                                                 printf("Jogador %d venceu!\n", jogador_atual);
                                             } else if (verifica_empate(pontos, jogadas_sem_progresso)) {
                                                 vencedor = -1;
-                                                processar_vitoria_derrota(vencedor, modo_jogo, &estado, &inicio_partida, &historico);  // ADICIONADO
+                                                processar_vitoria_derrota(vencedor, modo_jogo, &estado, &inicio_partida, &historico);
                                                 printf("Jogo terminou em empate!\n");
                                             } else {
                                                 jogador_atual = (jogador_atual == 1) ? 2 : 1;
@@ -1242,7 +1333,7 @@ int main(void) {
                             printf("Bot venceu!\n");
                         } else if (verifica_empate(pontos, jogadas_sem_progresso)) {
                             vencedor = -1;
-                            processar_vitoria_derrota(vencedor, modo_jogo, &estado, &inicio_partida, &historico);  // ADICIONADO
+                            processar_vitoria_derrota(vencedor, modo_jogo, &estado, &inicio_partida, &historico);
                             printf("Jogo terminou em empate!\n");
                         }
                     }
@@ -1682,9 +1773,9 @@ int main(void) {
                     al_draw_text(fonte, al_map_rgb(255, 255, 255), slot.x + slot.largura / 2,
                                  slot.y + 25, ALLEGRO_ALIGN_CENTER, slot_info);
 
-                    char filename[20];
-                    sprintf(filename, "savegame%d.dat", i + 1);
-                    FILE *f = fopen(filename, "rb");
+                    char filename[30];
+                    sprintf(filename, "savegame%d.txt", i + 1);  // MUDANÇA: .dat para .txt
+                    FILE *f = fopen(filename, "r");
                     if (f) {
                         al_draw_text(fonte_menor, al_map_rgb(34, 139, 34), slot.x + slot.largura / 2,
                                      slot.y + 55, ALLEGRO_ALIGN_CENTER, "Jogo Salvo");
@@ -1703,6 +1794,7 @@ int main(void) {
             }
 
             renderizar_efeitos_vitoria_derrota(fonte_titulo, vencedor);
+
 
             if (mostrar_mensagem_sucesso) {
                 al_draw_filled_rounded_rectangle(centerX - 200, ALTURA_TELA - 220, centerX + 200, ALTURA_TELA - 180, 10,
